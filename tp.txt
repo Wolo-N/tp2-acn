@@ -1,0 +1,38 @@
+'''
+
+CONJUNTOS:
+  P = conjunto de parciales
+  D = {1, 2, 3, 4, 5, 9, 10, 11, 12}
+  H = {9, 12, 15, 18}
+  E ⊆ P × P = conjunto de aristas (incompatibilidades)
+
+PARÁMETROS:
+  aₚ ∈ ℤ₊    ∀p ∈ P     (aulas requeridas por parcial p)
+  C = 75                (capacidad de aulas por slot)
+  G = (P, E)            (grafo de incompatibilidades)
+
+VARIABLES:
+  x_{p,d,h} ∈ {0,1}    ∀p ∈ P, ∀d ∈ D, ∀h ∈ H
+  yₚ ∈ {0,1}           ∀p ∈ P
+
+FUNCIÓN OBJETIVO:
+  Maximizar:  Z = Σ yₚ
+                  p∈P
+
+SUJETO A:
+
+  (R1) Asignación única:
+       Σ    Σ   x_{p,d,h} = yₚ                    ∀p ∈ P
+       d∈D  h∈H
+
+  (R2) Incompatibilidades:
+       x_{p,d,h} + x_{q,d,h} ≤ 1                  ∀(p,q) ∈ E, ∀d ∈ D, ∀h ∈ H
+
+  (R3) Capacidad de aulas:
+       Σ  aₚ · x_{p,d,h} ≤ C                      ∀d ∈ D, ∀h ∈ H
+       p∈P
+
+  (R4) Naturaleza binaria:
+       x_{p,d,h}, yₚ ∈ {0,1}                      ∀p ∈ P, ∀d ∈ D, ∀h ∈ H
+
+'''

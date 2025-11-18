@@ -1,0 +1,24 @@
+# SCIP installation directory
+SCIPI/
+
+# SCIP generated files
+*.lp
+*.tbl
+*.sol
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

@@ -38,8 +38,26 @@ def parsear_solucion_scip(salida_texto):
 
     return asignaciones, valor_objetivo
 
+def leer_aulas_requeridas():
+    """Lee el archivo cursos.dat para obtener las aulas requeridas por cada parcial"""
+    aulas = {}
+    try:
+        with open('cursos.dat', 'r') as f:
+            for line in f:
+                parts = line.strip().split('\t')
+                if len(parts) == 2:
+                    parcial = parts[0]
+                    num_aulas = int(parts[1])
+                    aulas[parcial] = num_aulas
+    except FileNotFoundError:
+        print("Advertencia: No se encontró cursos.dat, no se mostrarán las aulas")
+    return aulas
+
 def generar_reporte(asignaciones, valor_objetivo):
     """Genera un reporte organizado por día y hora"""
+
+    # Leer aulas requeridas
+    aulas_requeridas = leer_aulas_requeridas()
 
     # Organizar por slot (día, hora)
     slots = defaultdict(list)
@@ -51,16 +69,19 @@ def generar_reporte(asignaciones, valor_objetivo):
     horas = [9, 12, 15, 18]
 
     print("ASIGNACIÓN DE PARCIALES POR SLOT\n")
-    print(f"{'Día':<6} {'Hora':<6} {'Cantidad':<10} {'Parciales'}")
-    print(f"{'-'*70}")
+    print(f"{'Día':<6} {'Hora':<6} {'Cantidad':<10} {'Aulas':<8} {'Parciales'}")
+    print(f"{'-'*80}")
 
     total_asignados = 0
     for dia in dias:
         for hora in horas:
             parciales_slot = slots.get((dia, hora), [])
             if parciales_slot:
+                # Calcular total de aulas usadas en este slot
+                total_aulas = sum(aulas_requeridas.get(p, 0) for p in parciales_slot)
+
                 parciales_str = ', '.join(sorted(parciales_slot, key=lambda x: int(x[1:])))
-                print(f"{dia:<6} {hora:<6} {len(parciales_slot):<10} {parciales_str}")
+                print(f"{dia:<6} {hora:<6} {len(parciales_slot):<10} {total_aulas:<8} {parciales_str}")
                 total_asignados += len(parciales_slot)
 
     print(f"{'-'*70}")

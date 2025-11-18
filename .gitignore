@@ -1,8 +1,7 @@
 # SCIP installation directory
 SCIPI/
 
-# SCIP generated files
-*.lp
+
 *.tbl
 *.sol
 

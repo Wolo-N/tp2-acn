@@ -82,7 +82,3 @@ subto no_tres_vecinos_mismo_dia:
     forall <p3> in P with <p1,p3> in E and <p2,p3> in E:
       forall <d> in D:
         z[p1,d] + z[p2,d] + z[p3,d] <= 2;
-
-# ----------------------------------------------------------------------------
-# NOTA: Las variables x, y, z son binarias por definición
-# ----------------------------------------------------------------------------

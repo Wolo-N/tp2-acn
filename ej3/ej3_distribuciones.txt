@@ -1,0 +1,33 @@
+======================================================================
+ESTADÍSTICAS DE DISPERSIÓN: ej3_reporte.txt
+======================================================================
+
+Pares analizados: 2758
+Total estudiantes afectados: 31464
+
+DISTANCIAS (en días):
+  Mínima:             0
+  Máxima:             8
+  Promedio:           3.25
+  Promedio ponderado: 2.96
+
+SCORE TOTAL DE DISPERSIÓN: 93253
+  (suma de peso × distancia para todos los pares)
+
+CATEGORÍAS:
+  Pares mismo día (dist=0):       353 ( 12.8%)
+  Pares días consecutivos (d=1):  278 ( 10.1%)
+  Pares días lejanos (dist≥5):    799 ( 29.0%)
+
+DISTRIBUCIÓN DE DISTANCIAS:
+  Distancia  |  Cantidad de pares  |  Porcentaje
+  --------------------------------------------------
+       0     |         353        |     12.8%
+       1     |         278        |     10.1%
+       2     |         510        |     18.5%
+       3     |         490        |     17.8%
+       4     |         328        |     11.9%
+       5     |         372        |     13.5%
+       6     |         140        |      5.1%
+       7     |         124        |      4.5%
+       8     |         163        |      5.9%

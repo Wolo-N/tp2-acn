@@ -25,6 +25,8 @@ def parsear_solucion_scip(salida_texto):
         print(f"{'='*70}")
         print(f"\nParciales asignados: {valor_objetivo} de 208 ({valor_objetivo/208*100:.1f}%)")
         print(f"\n{'='*70}\n")
+    else:
+        valor_objetivo = 0
 
     # Extraer asignaciones x[P,D,H] = 1
     asignaciones = []

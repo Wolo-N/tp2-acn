@@ -1,150 +1,174 @@
 # ============================================================================
-# MODELO DE ASIGNACI√ìN DE PARCIALES - ZIMPL (VERSI√ìN 3)
+# MODELO PARTE 3 - MAXIMIZAR DISPERSI”N TEMPORAL
 # ============================================================================
-# Problema: Asignar parciales maximizando dispersi√≥n temporal
+# OBJETIVO PRIORITARIO: Maximizar dispersiÛn ponderada por estudiantes en com˙n
 #
-# FUNCI√ìN OBJETIVO:
-# Maximizar la dispersi√≥n de parciales entre estudiantes, evitando que tengan
-# todos sus parciales concentrados en pocas fechas consecutivas.
+# Estrategia:
+# - Priorizar agendar parciales con MAYOR cantidad de estudiantes en com˙n
+#   lo M¡S DISPERSOS posible en el tiempo
+# - NO es necesario agendar todos los parciales
+# - La mÈtrica es: suma de w[p1,p2] * distancia[p1,p2]
+#   donde w[p1,p2] = cantidad de estudiantes que toman ambos parciales
 #
-# ESTRATEGIA CON INFORMACI√ìN LIMITADA:
-# Como solo conocemos estudiantes en com√∫n entre PARES de parciales, usamos
-# una funci√≥n objetivo que penaliza cuando dos parciales con estudiantes en
-# com√∫n est√°n muy cerca en el tiempo. La penalizaci√≥n es proporcional a:
-#   - N√∫mero de estudiantes en com√∫n (peso w_pq)
-#   - Distancia temporal entre los parciales (menor distancia = mayor penalizaci√≥n)
-#
-# FUNCI√ìN OBJETIVO:
-#   Minimizar: Œ£ w_pq √ó penalizaci√≥n_temporal(p,q)
-#              (p,q)‚ààE
-#
-# donde penalizaci√≥n_temporal se define como el inverso de la distancia en d√≠as
-# entre los parciales (parciales m√°s cercanos = mayor penalizaci√≥n)
+# Simplificaciones para eficiencia:
+# - Usar variable dia[p] en vez de x[p,d,h] (ignorar hora especÌfica)
+# - Mapear dÌas a Ìndices secuenciales: 1í1, 2í2, ..., 12í9
+# - Linearizar distancia con variables auxiliares
 # ============================================================================
 
 # ----------------------------------------------------------------------------
 # CONJUNTOS
 # ----------------------------------------------------------------------------
-set P := { read "cursos.dat" as "<1s>" };                       # Parciales (P0-P207)
-set D := { 1, 2, 3, 4, 5, 9, 10, 11, 12 };                     # D√≠as disponibles
-set H := { 9, 12, 15, 18 };                                     # Horarios disponibles
-set E := { read "estudiantes-en-comun.dat" as "<1s,2s>" };     # Incompatibilidades
+set P := { read "cursos.dat" as "<1s>" };                       # Parciales
+set D := { 1, 2, 3, 4, 5, 9, 10, 11, 12 };                     # DÌas h·biles
+set H := { 9, 12, 15, 18 };                                     # Horarios
+
+# Pares de parciales con estudiantes en com˙n (incompatibilidades)
+set E := { read "estudiantes-en-comun.dat" as "<1s,2s>" };
 
 # ----------------------------------------------------------------------------
-# PAR√ÅMETROS
+# PAR¡METROS
 # ----------------------------------------------------------------------------
-param capacidad := 75;  # Capacidad de aulas por slot
+param capacidad := 75;
 
 # Aulas requeridas por cada parcial
 param aulas[P] := read "cursos.dat" as "<1s> 2n";
 
-# Peso de cada arista (estudiantes en com√∫n)
+# Peso = cantidad de estudiantes en com˙n entre dos parciales
 param w[E] := read "estudiantes-en-comun.dat" as "<1s,2s> 3n";
 
-# Par√°metro de penalizaci√≥n por cercan√≠a temporal
-# Penalizaci√≥n mayor cuando los d√≠as est√°n m√°s cerca
-# Formula: si d1 == d2 ‚Üí 100, sino ‚Üí 20 / |d1-d2|
-param penalizacion[<d1,d2> in D * D] :=
-  if d1 == d2 then 100
-  else if d1 < d2 then 20 / (d2 - d1)
-  else 20 / (d1 - d2) end end;
+# Mapeo de dÌa real a Ìndice secuencial (para distancias uniformes)
+# DÌa:    1  2  3  4  5  9  10 11 12
+# Õndice: 1  2  3  4  5  6  7  8  9
+param indice[D] := <1> 1, <2> 2, <3> 3, <4> 4, <5> 5,
+                   <9> 6, <10> 7, <11> 8, <12> 9;
+
+# Constante grande para Big-M
+param M := 100;
 
 # ----------------------------------------------------------------------------
 # VARIABLES
 # ----------------------------------------------------------------------------
-# x[p,d,h] = 1 si el parcial p se asigna al d√≠a d y hora h
+
+# x[p,d,h] = 1 si parcial p se asigna en dÌa d, hora h
 var x[P * D * H] binary;
 
-# y[p] = 1 si el parcial p es asignado
+# y[p] = 1 si parcial p est· asignado (en alg˙n dÌa/hora)
 var y[P] binary;
 
-# z[p,d] = 1 si el parcial p es asignado en el d√≠a d (cualquier hora)
-var z[P * D] binary;
+# idx[p] = Ìndice secuencial del dÌa asignado a parcial p
+#          (0 si no asignado, 1-9 si asignado)
+var idx[P] integer >= 0 <= 9;
 
-# Variable auxiliar que indica si p1 est√° en d1 Y p2 est√° en d2 simult√°neamente
-# Usada para linearizar el producto z[p1,d1] * z[p2,d2]
-var ambos[E * D * D] binary;
+# distancia[p1,p2] = |idx[p1] - idx[p2]| si ambos asignados, 0 si alguno no asignado
+var distancia[E] integer >= 0 <= 8;
 
 # ----------------------------------------------------------------------------
-# FUNCI√ìN OBJETIVO
-# ============================================================================
-# OBJETIVO MULTICRITERIO (enfoque lexicogr√°fico):
-# 1¬∞ Prioridad: Maximizar parciales asignados (agregamos gran peso)
-# 2¬∞ Prioridad: Minimizar concentraci√≥n temporal (dispersar parciales)
-#
-# Funci√≥n objetivo = 1000 * parciales_asignados - costo_temporal
-# ============================================================================
+# FUNCI”N OBJETIVO
+# ----------------------------------------------------------------------------
+# Maximizar: suma de (peso ◊ distancia) para todos los pares
+# Esto prioriza dispersar parciales con muchos estudiantes en com˙n
+# ----------------------------------------------------------------------------
 
-minimize concentracion:
-  sum <p1,p2> in E:
-    sum <d1> in D:
-      sum <d2> in D:
-        w[p1,p2] * penalizacion[d1,d2] * ambos[p1,p2,d1,d2]
-  - 1000 * (sum <p> in P: y[p]);
+maximize dispersion_total:
+  sum <p1,p2> in E: w[p1,p2] * distancia[p1,p2];
 
 # ----------------------------------------------------------------------------
 # RESTRICCIONES
 # ----------------------------------------------------------------------------
 
-# (R1) Asignaci√≥n √∫nica: cada parcial se asigna a lo sumo un slot
+# (R1) AsignaciÛn ˙nica por parcial
+# Si un parcial est· asignado (y[p]=1), debe estar en exactamente un slot
 subto asignacion_unica:
   forall <p> in P:
-    sum <d> in D:
-      sum <h> in H:
-        x[p,d,h] == y[p];
+    sum <d,h> in D * H: x[p,d,h] == y[p];
 
-# (R2) Incompatibilidades: parciales incompatibles no pueden estar en el mismo slot
+# (R2) Incompatibilidades en el mismo slot
+# Dos parciales con estudiantes en com˙n NO pueden estar en el mismo slot
 subto incompatibilidades:
   forall <p1,p2> in E:
-    forall <d> in D:
-      forall <h> in H:
-        x[p1,d,h] + x[p2,d,h] <= 1;
+    forall <d,h> in D * H:
+      x[p1,d,h] + x[p2,d,h] <= 1;
 
-# (R3) Capacidad de aulas: no exceder capacidad por slot
+# (R3) Capacidad de aulas
+# Total de aulas requeridas en un slot no puede exceder capacidad
 subto capacidad_aulas:
-  forall <d> in D:
-    forall <h> in H:
-      sum <p> in P:
-        aulas[p] * x[p,d,h] <= capacidad;
+  forall <d,h> in D * H:
+    sum <p> in P: aulas[p] * x[p,d,h] <= capacidad;
 
-# (R4) Linking constraint: z[p,d] = 1 si p est√° asignado en d√≠a d
-subto linking_z:
+# (R4) Linking idx[p] con dÌa asignado
+# Si p est· en dÌa d, entonces idx[p] = indice[d]
+# Si p no est· asignado, idx[p] = 0
+subto linking_idx:
   forall <p> in P:
-    forall <d> in D:
-      z[p,d] == sum <h> in H: x[p,d,h];
-
-
-
-# (R6) NUEVA: Linearizaci√≥n del producto z[p1,d1] * z[p2,d2]
-# ambos[p1,p2,d1,d2] = 1 ssi z[p1,d1] = 1 Y z[p2,d2] = 1
-subto linearizacion_ambos_1:
-  forall <p1,p2> in E:
-    forall <d1> in D:
-      forall <d2> in D:
-        ambos[p1,p2,d1,d2] <= z[p1,d1];
-
-subto linearizacion_ambos_2:
-  forall <p1,p2> in E:
-    forall <d1> in D:
-      forall <d2> in D:
-        ambos[p1,p2,d1,d2] <= z[p2,d2];
-
-subto linearizacion_ambos_3:
-  forall <p1,p2> in E:
-    forall <d1> in D:
-      forall <d2> in D:
-        ambos[p1,p2,d1,d2] >= z[p1,d1] + z[p2,d2] - 1;
+    idx[p] == sum <d,h> in D * H: indice[d] * x[p,d,h];
 
 # ----------------------------------------------------------------------------
-# NOTAS SOBRE LA FUNCI√ìN OBJETIVO:
+# (R5) LinearizaciÛn de distancia = |idx[p1] - idx[p2]|
 # ----------------------------------------------------------------------------
-# 1. Maximizamos dispersi√≥n PENALIZANDO concentraci√≥n temporal
-# 2. La penalizaci√≥n es mayor cuando:
-#    - Hay muchos estudiantes en com√∫n (peso w_pq alto)
-#    - Los parciales est√°n en d√≠as cercanos (penalizaci√≥n[d1,d2] alta)
-# 3. El peso 1000 asegura que primero se maximice la cantidad de parciales
-#    asignados, y luego se dispersen temporalmente
-# 4. Con informaci√≥n limitada (solo pares), esta es una aproximaci√≥n razonable:
-#    dispersar parciales con estudiantes en com√∫n dispersa indirectamente
-#    los parciales de cada estudiante individual
+# Necesitamos:
+# - distancia = 0 si alguno de los dos parciales NO est· asignado
+# - distancia = |idx[p1] - idx[p2]| si ambos est·n asignados
+#
+# Usando Big-M:
+# - Si y[p1]=0 o y[p2]=0, forzar distancia=0
+# - Si y[p1]=1 y y[p2]=1, calcular |idx[p1] - idx[p2]|
+# ----------------------------------------------------------------------------
+
+# Si p1 no asignado, distancia debe ser 0
+subto distancia_zero_si_p1_no_asignado:
+  forall <p1,p2> in E:
+    distancia[p1,p2] <= M * y[p1];
+
+# Si p2 no asignado, distancia debe ser 0
+subto distancia_zero_si_p2_no_asignado:
+  forall <p1,p2> in E:
+    distancia[p1,p2] <= M * y[p2];
+
+# Si ambos asignados: distancia >= idx[p1] - idx[p2]
+# Si alguno no asignado: restricciÛn se relaja (Big-M)
+subto distancia_abs_1:
+  forall <p1,p2> in E:
+    distancia[p1,p2] >= idx[p1] - idx[p2] - M * (2 - y[p1] - y[p2]);
+
+# Si ambos asignados: distancia >= idx[p2] - idx[p1]
+# Si alguno no asignado: restricciÛn se relaja (Big-M)
+subto distancia_abs_2:
+  forall <p1,p2> in E:
+    distancia[p1,p2] >= idx[p2] - idx[p1] - M * (2 - y[p1] - y[p2]);
+
+# ============================================================================
+# NOTAS SOBRE EL MODELO
+# ============================================================================
+#
+# 1. DIFERENCIA CON MODELOS ANTERIORES:
+#    - Modelos 1-2: Maximizan cantidad de parciales asignados
+#    - Modelo 3: Maximiza SOLO dispersiÛn ponderada
+#    - Resultado: Puede no asignar todos los parciales si eso mejora dispersiÛn
+#
+# 2. PRIORIDAD DE ESTUDIANTES:
+#    - w[p1,p2] = cantidad de estudiantes que toman ambos parciales
+#    - Maximizar sum(w * distancia) prioriza dispersar parciales con m·s
+#      estudiantes en com˙n
+#    - Ejemplo: 100 estudiantes tomando P1 y P2 í peso 100
+#                10 estudiantes tomando P3 y P4 í peso 10
+#                El modelo preferir· separar P1-P2 que P3-P4
+#
+# 3. DISTANCIAS:
+#    - Usamos Ìndice secuencial (1-9) para tratar todos los dÌas uniformemente
+#    - Distancia m·xima posible = 8 (dÌa 1 a dÌa 12)
+#    - dÌas 1-5 son consecutivos (distancias 1-4 entre ellos)
+#    - dÌas 9-12 son consecutivos (distancias 1-3 entre ellos)
+#    - dÌa 5 a dÌa 9: distancia 1 (en Ìndice secuencial)
+#
+# 4. SIMPLIFICACI”N:
+#    - No usamos variable z[p,d] como en modelos anteriores
+#    - Derivamos idx[p] directamente de x[p,d,h]
+#    - Esto reduce variables: 12,534 en vez de 232,966
+#
+# 5. EXPECTATIVA:
+#    - El solver deberÌa usar dÌas 1,2,3,4,5,9,10,11,12 distribuidamente
+#    - Parciales con muchos estudiantes en com˙n deberÌan estar muy separados
+#    - Algunos parciales pueden quedar sin asignar si no caben sin violar
+#      restricciones de incompatibilidad/capacidad
 # ============================================================================

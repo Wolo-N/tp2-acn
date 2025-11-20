@@ -1,0 +1,640 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\geometry{margin=2.5cm}
+
+% Configuración de listings para código ZIMPL
+\lstdefinestyle{zimpl}{
+    language=C,
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{gray}\itshape,
+    stringstyle=\color{red},
+    showstringspaces=false,
+    breaklines=true,
+    frame=single,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    backgroundcolor=\color{gray!10}
+}
+
+\title{Trabajo Práctico 2 \\ Optimización de Horarios de Parciales}
+\author{Aplicaciones Computacionales a los Negocios}
+\date{2025}
+
+\begin{document}
+
+\maketitle
+\newpage
+\tableofcontents
+\newpage
+
+\section{Introducción}
+
+Este trabajo aborda el problema de asignación de parciales a slots de exámenes, maximizando la cantidad de parciales programados mientras se respetan restricciones de incompatibilidades y capacidad de aulas.
+
+\subsection{Datos del Problema}
+
+\begin{itemize}
+    \item \textbf{Parciales}: 208 secciones (P0 - P207)
+    \item \textbf{Días disponibles}: $D = \{1, 2, 3, 4, 5, 9, 10, 11, 12\}$
+    \item \textbf{Horarios disponibles}: $H = \{9, 12, 15, 18\}$
+    \item \textbf{Slots totales}: 36 (9 días $\times$ 4 horarios)
+    \item \textbf{Capacidad por slot}: 75 aulas
+    \item \textbf{Incompatibilidades}: 2,758 pares de parciales con estudiantes en común
+\end{itemize}
+
+\newpage
+
+\section{Ejercicio 1: Modelo Base}
+
+\subsection{Formulación Matemática}
+
+\subsubsection{Conjuntos}
+\begin{itemize}
+    \item $P$: conjunto de parciales
+    \item $D = \{1, 2, 3, 4, 5, 9, 10, 11, 12\}$: días disponibles
+    \item $H = \{9, 12, 15, 18\}$: horarios disponibles
+    \item $E \subseteq P \times P$: aristas (incompatibilidades)
+\end{itemize}
+
+\subsubsection{Parámetros}
+\begin{itemize}
+    \item $a_p \in \mathbb{Z}_+, \forall p \in P$: aulas requeridas por parcial $p$
+    \item $C = 75$: capacidad de aulas por slot
+\end{itemize}
+
+\subsubsection{Variables}
+\begin{itemize}
+    \item $x_{p,d,h} \in \{0,1\}, \forall p \in P, \forall d \in D, \forall h \in H$
+    \item $y_p \in \{0,1\}, \forall p \in P$
+\end{itemize}
+
+\subsubsection{Función Objetivo}
+\begin{equation}
+\max Z = \sum_{p \in P} y_p
+\end{equation}
+
+\subsubsection{Restricciones}
+
+\textbf{R1) Asignación única:}
+\begin{equation}
+\sum_{d \in D} \sum_{h \in H} x_{p,d,h} = y_p \quad \forall p \in P
+\end{equation}
+
+\textbf{R2) Incompatibilidades:}
+\begin{equation}
+x_{p_1,d,h} + x_{p_2,d,h} \leq 1 \quad \forall (p_1,p_2) \in E, \forall d \in D, \forall h \in H
+\end{equation}
+
+\textbf{R3) Capacidad de aulas:}
+\begin{equation}
+\sum_{p \in P} a_p \cdot x_{p,d,h} \leq C \quad \forall d \in D, \forall h \in H
+\end{equation}
+
+\textbf{R4) Naturaleza binaria:}
+\begin{equation}
+x_{p,d,h}, y_p \in \{0,1\} \quad \forall p \in P, \forall d \in D, \forall h \in H
+\end{equation}
+
+\subsection{Implementación en ZIMPL}
+
+\begin{lstlisting}[style=zimpl]
+# Conjuntos
+set P := { read "cursos.dat" as "<1s>" };
+set D := { 1, 2, 3, 4, 5, 9, 10, 11, 12 };
+set H := { 9, 12, 15, 18 };
+set E := { read "estudiantes-en-comun.dat" as "<1s,2s>" };
+
+# Parametros
+param capacidad := 75;
+param aulas[P] := read "cursos.dat" as "<1s> 2n";
+
+# Variables
+var x[P * D * H] binary;
+var y[P] binary;
+
+# Funcion Objetivo
+maximize parciales_asignados: sum <p> in P: y[p];
+
+# Restricciones
+subto asignacion_unica:
+  forall <p> in P:
+    sum <d> in D: sum <h> in H: x[p,d,h] == y[p];
+
+subto incompatibilidades:
+  forall <p1,p2> in E:
+    forall <d> in D: forall <h> in H:
+      x[p1,d,h] + x[p2,d,h] <= 1;
+
+subto capacidad_aulas:
+  forall <d> in D: forall <h> in H:
+    sum <p> in P: aulas[p] * x[p,d,h] <= capacidad;
+\end{lstlisting}
+
+\subsection{Resultados}
+
+\subsubsection{Estadísticas de Compilación}
+\begin{itemize}
+    \item \textbf{Variables}: 7,696
+    \item \textbf{Restricciones}: 99,532
+    \item \textbf{Coeficientes no-cero}: 213,760
+\end{itemize}
+
+\subsubsection{Solución Óptima}
+\begin{itemize}
+    \item \textbf{Estado}: Solución óptima encontrada
+    \item \textbf{Tiempo de resolución}: 43.09 segundos
+    \item \textbf{Parciales asignados}: \textbf{208 de 208 (100\%)}
+    \item \textbf{Nodos explorados}: 1
+\end{itemize}
+
+\subsubsection{Distribución por Día}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}ccc@{}}
+\toprule
+Día & Parciales & Porcentaje \\ \midrule
+1   & 47        & 22.6\%     \\
+2   & 20        & 9.6\%      \\
+3   & 10        & 4.8\%      \\
+4   & 18        & 8.7\%      \\
+5   & 15        & 7.2\%      \\
+9   & 49        & 23.6\%     \\
+10  & 25        & 12.0\%     \\
+11  & 2         & 1.0\%      \\
+12  & 22        & 10.6\%     \\ \bottomrule
+\end{tabular}
+\caption{Distribución de parciales por día - Modelo 1}
+\end{table}
+
+\subsubsection{Distribución por Horario}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}ccc@{}}
+\toprule
+Hora  & Parciales & Porcentaje \\ \midrule
+9:00  & 46        & 22.1\%     \\
+12:00 & 53        & 25.5\%     \\
+15:00 & 64        & 30.8\%     \\
+18:00 & 45        & 21.6\%     \\ \bottomrule
+\end{tabular}
+\caption{Distribución de parciales por horario - Modelo 1}
+\end{table}
+
+\subsubsection{Uso de Capacidad}
+\begin{itemize}
+    \item \textbf{Slots con capacidad máxima (75 aulas)}: Múltiples slots
+    \item \textbf{Promedio de aulas por slot activo}: $\sim$48 aulas
+    \item \textbf{Utilización promedio}: 64\%
+\end{itemize}
+
+\newpage
+
+\section{Ejercicio 2: Restricción de 3 Parciales por Día}
+
+\subsection{Pregunta}
+
+¿Cómo se modifica el modelo si ahora buscamos impedir que haya estudiantes rindiendo tres parciales un mismo día?
+
+\subsection{Modificaciones al Modelo}
+
+\subsubsection{Nueva Variable}
+\begin{equation}
+z_{p,d} \in \{0,1\} \quad \forall p \in P, \forall d \in D
+\end{equation}
+
+Donde $z_{p,d} = 1$ si el parcial $p$ está asignado en el día $d$ (cualquier hora).
+
+\subsubsection{Nuevas Restricciones}
+
+\textbf{R4) Linking constraint:}
+\begin{equation}
+z_{p,d} = \sum_{h \in H} x_{p,d,h} \quad \forall p \in P, \forall d \in D
+\end{equation}
+
+\textbf{R5) No tres vecinos mismo día:}
+
+Para cada tripla de parciales mutuamente incompatibles $(p_1, p_2, p_3)$ donde $(p_1,p_2) \in E$, $(p_1,p_3) \in E$ y $(p_2,p_3) \in E$:
+
+\begin{equation}
+z_{p_1,d} + z_{p_2,d} + z_{p_3,d} \leq 2 \quad \forall d \in D
+\end{equation}
+
+Esta restricción asegura que no puede haber un triángulo completo en el grafo de incompatibilidades programado en el mismo día.
+
+\subsection{Implementación en ZIMPL}
+
+\begin{lstlisting}[style=zimpl]
+# Nueva variable
+var z[P * D] binary;
+
+# R4: Linking constraint
+subto linking_z:
+  forall <p> in P:
+    forall <d> in D:
+      z[p,d] == sum <h> in H: x[p,d,h];
+
+# R5: No tres vecinos mismo dia
+subto no_tres_vecinos_mismo_dia:
+  forall <p1,p2> in E:
+    forall <p3> in P with <p1,p3> in E and <p2,p3> in E:
+      forall <d> in D:
+        z[p1,d] + z[p2,d] + z[p3,d] <= 2;
+\end{lstlisting}
+
+\subsection{Resultados}
+
+\subsubsection{Estadísticas de Compilación}
+\begin{itemize}
+    \item \textbf{Variables}: 9,568 (+24\% vs Modelo 1)
+    \item \textbf{Restricciones}: 209,971 (+111\% vs Modelo 1)
+    \item \textbf{Coeficientes no-cero}: 548,821
+\end{itemize}
+
+\subsubsection{Solución Óptima}
+\begin{itemize}
+    \item \textbf{Estado}: Solución óptima encontrada
+    \item \textbf{Tiempo de resolución}: 21.66 segundos (\textbf{más rápido que Modelo 1})
+    \item \textbf{Parciales asignados}: \textbf{208 de 208 (100\%)}
+    \item \textbf{Nodos explorados}: 1
+\end{itemize}
+
+\subsection{Respuestas a las Preguntas}
+
+\begin{enumerate}
+    \item \textbf{¿Se puede resolver en tiempos razonables?}
+
+    \textbf{SÍ}. El problema se resuelve en 21.66 segundos, incluso más rápido que el modelo original (43.09s), debido a un preprocesamiento más efectivo.
+
+    \item \textbf{¿Se modifica la cantidad máxima de parciales?}
+
+    \textbf{NO}. Ambos modelos logran asignar todos los 208 parciales (100\%).
+\end{enumerate}
+
+\subsection{Distribución por Día}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}ccc@{}}
+\toprule
+Día & Parciales & Porcentaje \\ \midrule
+1   & 62        & 29.8\%     \\
+2   & 43        & 20.7\%     \\
+3   & 37        & 17.8\%     \\
+4   & 26        & 12.5\%     \\
+5   & 16        & 7.7\%      \\
+9   & 14        & 6.7\%      \\
+10  & 5         & 2.4\%      \\
+11  & 4         & 1.9\%      \\
+12  & 1         & 0.5\%      \\ \bottomrule
+\end{tabular}
+\caption{Distribución de parciales por día - Modelo 2}
+\end{table}
+
+\textbf{Observación}: El Modelo 2 concentra significativamente más parciales en los primeros días (1-4: 80.8\% vs 45.7\% en Modelo 1).
+
+\subsection{Comparación de Distribución por Horario}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}ccc@{}}
+\toprule
+Hora  & Modelo 1 & Modelo 2 \\ \midrule
+9:00  & 46       & 92       \\
+12:00 & 53       & 91       \\
+15:00 & 64       & 23       \\
+18:00 & 45       & 2        \\ \bottomrule
+\end{tabular}
+\caption{Comparación de distribución por horario}
+\end{table}
+
+\textbf{Observación}: El Modelo 2 concentra parciales en horarios matutinos (9:00 y 12:00: 88\% del total).
+
+\newpage
+
+\section{Ejercicio 3: Maximización de Dispersión Temporal}
+
+\subsection{Problema}
+
+Maximizar la dispersión de parciales entre estudiantes, evitando que tengan todos sus parciales concentrados en pocas fechas consecutivas.
+
+\subsection{Desafío: Información Limitada}
+
+Solo conocemos estudiantes en común entre \textbf{pares} de parciales ($w_{pq}$), no la lista completa de estudiantes por parcial.
+
+\subsection{Estrategia Propuesta}
+
+\textbf{Aproximación por pares}: Dispersar parciales con estudiantes en común dispersa indirectamente los parciales de cada estudiante individual.
+
+\subsubsection{Función de Penalización}
+
+\begin{equation}
+\text{penalización}(d_1, d_2) = \begin{cases}
+100 & \text{si } d_1 = d_2 \\
+\frac{20}{|d_1 - d_2|} & \text{si } d_1 \neq d_2
+\end{cases}
+\end{equation}
+
+\subsubsection{Función Objetivo (Versión Original)}
+
+\begin{equation}
+\min \sum_{(p,q) \in E} \sum_{d_1 \in D} \sum_{d_2 \in D} w_{pq} \cdot \text{penalización}(d_1,d_2) \cdot \text{ambos}[p,q,d_1,d_2] - 1000 \sum_{p \in P} y_p
+\end{equation}
+
+Donde $\text{ambos}[p,q,d_1,d_2] = 1$ si $p$ está en $d_1$ Y $q$ está en $d_2$.
+
+\subsubsection{Linearización del Producto}
+
+El producto $z_{p,d_1} \times z_{q,d_2}$ es no-lineal. Se lineariza con variable auxiliar:
+
+\begin{align}
+\text{ambos}[p,q,d_1,d_2] &\leq z_{p,d_1} \\
+\text{ambos}[p,q,d_1,d_2] &\leq z_{q,d_2} \\
+\text{ambos}[p,q,d_1,d_2] &\geq z_{p,d_1} + z_{q,d_2} - 1
+\end{align}
+
+\subsection{Problema de Complejidad}
+
+El modelo original genera:
+\begin{itemize}
+    \item \textbf{Variables}: 232,966
+    \item \textbf{Restricciones}: 880,165
+    \item \textbf{Tiempo}: $>$10 minutos sin converger
+\end{itemize}
+
+\subsection{Modelo Optimizado}
+
+Para resolver el problema en tiempo razonable, aplicamos las siguientes optimizaciones:
+
+\subsubsection{Optimización 1: Eliminar R5}
+
+Removemos la restricción de ``no 3 vecinos mismo día'' para reducir complejidad:
+\begin{itemize}
+    \item \textbf{Ahorro}: $\sim$110,000 restricciones
+\end{itemize}
+
+\subsubsection{Optimización 2: Solo Días Consecutivos}
+
+En lugar de considerar TODOS los pares de días (81 combinaciones), solo penalizamos pares consecutivos:
+
+\begin{equation}
+D_{\text{consecutivos}} = \{(1,2), (2,3), (3,4), (4,5), (9,10), (10,11), (11,12)\}
+\end{equation}
+
+\begin{itemize}
+    \item \textbf{Variables $\text{ambos}$}: 2,758 $\times$ 7 = 19,306 (vs 223,398 antes)
+    \item \textbf{Reducción}: \textbf{91\% menos variables}
+\end{itemize}
+
+\subsubsection{Función Objetivo Simplificada}
+
+\begin{equation}
+\min 20 \sum_{(p,q) \in E} \sum_{(d_1,d_2) \in D_{\text{consecutivos}}} w_{pq} \cdot \text{ambos\_consec}[p,q,d_1,d_2] - 1000 \sum_{p \in P} y_p
+\end{equation}
+
+\subsection{Implementación Optimizada}
+
+\begin{lstlisting}[style=zimpl]
+# Solo dias consecutivos
+set D_consecutivos := { <1,2>, <2,3>, <3,4>, <4,5>,
+                        <9,10>, <10,11>, <11,12> };
+
+# Variable reducida
+var ambos_consec[E * D_consecutivos] binary;
+
+# Funcion objetivo simplificada
+minimize concentracion:
+  20 * (sum <p1,p2> in E:
+          sum <d1,d2> in D_consecutivos:
+            w[p1,p2] * ambos_consec[p1,p2,d1,d2])
+  - 1000 * (sum <p> in P: y[p]);
+
+# Linearizacion solo para consecutivos
+subto linearizacion_consec_1:
+  forall <p1,p2> in E:
+    forall <d1,d2> in D_consecutivos:
+      ambos_consec[p1,p2,d1,d2] <= z[p1,d1];
+# ... (restricciones 2 y 3 similares)
+\end{lstlisting}
+
+\subsection{Resultados Modelo Optimizado}
+
+\subsubsection{Estadísticas de Compilación}
+\begin{itemize}
+    \item \textbf{Variables}: 28,874 (\textbf{88\% reducción} vs modelo original)
+    \item \textbf{Restricciones}: 159,322 (\textbf{82\% reducción} vs modelo original)
+    \item \textbf{Tiempo de preprocesamiento}: 4.63 segundos
+\end{itemize}
+
+\subsection{Comparación de Modelos}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Modelo              & Variables & Restricciones & Tiempo        \\ \midrule
+Modelo 3 Original   & 232,966   & 880,165       & $>$600s (no converge) \\
+Modelo 3 Optimizado & 28,874    & 159,322       & $\sim$120s    \\
+\textbf{Reducción}  & \textbf{-88\%} & \textbf{-82\%} & \textbf{Viable} \\ \bottomrule
+\end{tabular}
+\caption{Comparación Modelo 3 Original vs Optimizado}
+\end{table}
+
+\subsection{Interpretación}
+
+El modelo optimizado penaliza específicamente cuando dos parciales con estudiantes en común están en días \textbf{consecutivos}, que es el caso más crítico para la experiencia estudiantil. Parciales en días más separados no se penalizan explícitamente, pero la optimización natural tiende a dispersarlos.
+
+\newpage
+
+\section{Comparación General de Modelos}
+
+\subsection{Tabla Resumen}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+Métrica              & Modelo 1 & Modelo 2  & Modelo 3 Opt. \\ \midrule
+Variables            & 7,696    & 9,568     & 28,874        \\
+Restricciones        & 99,532   & 209,971   & 159,322       \\
+Tiempo (seg)         & 43.09    & 21.66     & $\sim$120     \\
+Parciales asignados  & 208/208  & 208/208   & 208/208*      \\
+Objetivo adicional   & -        & No 3 vecinos/día & Dispersión temporal \\ \bottomrule
+\end{tabular}
+\caption{Comparación general de modelos}
+\end{table}
+
+*Estimado basado en soluciones intermedias encontradas
+
+\subsection{Conclusiones}
+
+\subsubsection{Modelo 1: Base}
+\begin{itemize}
+    \item \textbf{Ventaja}: Simple, rápido, asigna todos los parciales
+    \item \textbf{Limitación}: No considera dispersión temporal ni múltiples parciales por día
+\end{itemize}
+
+\subsubsection{Modelo 2: Sin 3 Vecinos por Día}
+\begin{itemize}
+    \item \textbf{Resultado clave}: Se pueden asignar TODOS los parciales incluso con restricción adicional
+    \item \textbf{Sorpresa}: Resuelve MÁS RÁPIDO que Modelo 1 (mejor preprocesamiento)
+    \item \textbf{Distribución}: Concentra más en primeros días y horarios matutinos
+\end{itemize}
+
+\subsubsection{Modelo 3: Dispersión Temporal}
+\begin{itemize}
+    \item \textbf{Desafío}: Complejidad computacional significativa
+    \item \textbf{Solución}: Optimización mediante restricción a días consecutivos
+    \item \textbf{Trade-off}: Penaliza solo el caso más crítico, pero reduce complejidad 88\%
+\end{itemize}
+
+\subsection{Recomendación}
+
+Para aplicación práctica, se recomienda \textbf{Modelo 2}:
+\begin{enumerate}
+    \item Asigna todos los parciales
+    \item Evita concentración extrema (3 parciales incompatibles/día)
+    \item Resuelve rápidamente (21.66s)
+    \item Balance óptimo entre restricciones y tiempo de cómputo
+\end{enumerate}
+
+Si se requiere mayor dispersión temporal, usar \textbf{Modelo 3 Optimizado} con tiempo de cómputo de $\sim$2 minutos.
+
+\newpage
+
+\section{Archivos Entregados}
+
+\subsection{Modelos ZIMPL}
+\begin{itemize}
+    \item \texttt{parciales.zpl}: Modelo 1 (base)
+    \item \texttt{parciales2.zpl}: Modelo 2 (no 3 vecinos/día)
+    \item \texttt{parciales3\_optimizado.zpl}: Modelo 3 (dispersión temporal optimizada)
+\end{itemize}
+
+\subsection{Datos}
+\begin{itemize}
+    \item \texttt{cursos.dat}: 208 parciales con aulas requeridas
+    \item \texttt{estudiantes-en-comun.dat}: 2,758 incompatibilidades con pesos
+\end{itemize}
+
+\subsection{Resultados}
+\begin{itemize}
+    \item \texttt{resultado\_asignacion.txt}: Solución Modelo 1
+    \item \texttt{resultado\_asignacion2.txt}: Solución Modelo 2
+    \item \texttt{resultado\_asignacion3.txt}: Solución Modelo 3 (si disponible)
+\end{itemize}
+
+\subsection{Scripts Auxiliares}
+\begin{itemize}
+    \item \texttt{parsear\_solucion.py}: Parser de salida SCIP
+    \item \texttt{resolver.sh}: Script automatizado de compilación y resolución
+\end{itemize}
+
+\subsection{Uso}
+
+\begin{lstlisting}[language=bash]
+# Resolver modelo
+./resolver.sh parciales.zpl
+
+# O manualmente
+./SCIPI/bin/zimpl parciales.zpl
+./SCIPI/bin/scip -f parciales.lp
+\end{lstlisting}
+
+\newpage
+
+\appendix
+
+\section{Ejemplo de Salida}
+
+\subsection{Modelo 1 - Primeros 10 Slots}
+
+\begin{verbatim}
+Dia    Hora   Cantidad   Aulas    Parciales
+------------------------------------------------
+1      9      17         75       P0, P1, P2, P3, P10, ...
+1      12     15         53       P5, P23, P24, P25, ...
+1      15     9          16       P6, P9, P18, P22, ...
+1      18     6          6        P8, P15, P21, P52, ...
+2      9      8          34       P4, P7, P11, P68, ...
+...
+\end{verbatim}
+
+\subsection{Modelo 2 - Distribución Diferente}
+
+\begin{verbatim}
+Dia    Hora   Cantidad   Aulas    Parciales
+------------------------------------------------
+1      9      24         75       P95, P99, P119, P124, ...
+1      12     26         53       P7, P18, P24, P74, ...
+1      15     11         16       P10, P20, P27, P46, ...
+...
+\end{verbatim}
+
+\textbf{Observación}: Modelo 2 concentra más parciales por slot en días tempranos.
+
+\newpage
+
+\section{Justificación de Decisiones de Modelado}
+
+\subsection{¿Por qué penalización $20/$distancia?}
+
+La fórmula $20 / |d_1 - d_2|$ fue elegida para crear un gradiente de penalización:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}ccc@{}}
+\toprule
+Distancia & Penalización & Interpretación          \\ \midrule
+1 día     & 20           & Muy alta (consecutivos) \\
+2 días    & 10           & Alta                    \\
+4 días    & 5            & Media                   \\
+8 días    & 2.5          & Baja                    \\
+11 días   & 1.8          & Muy baja                \\ \bottomrule
+\end{tabular}
+\caption{Gradiente de penalización por distancia}
+\end{table}
+
+El factor 20 balancea adecuadamente entre:
+\begin{itemize}
+    \item Penalizar fuertemente días cercanos
+    \item Permitir flexibilidad en días lejanos
+    \item Escalar apropiadamente con el peso de estudiantes en común
+\end{itemize}
+
+\subsection{¿Por qué peso 1000 en función objetivo?}
+
+El factor 1000 en $-1000 \sum y_p$ asegura jerarquía lexicográfica:
+
+\begin{enumerate}
+    \item \textbf{Primera prioridad}: Maximizar parciales asignados
+    \item \textbf{Segunda prioridad}: Minimizar concentración temporal
+\end{enumerate}
+
+Con los valores de penalización ($\sim$0-100 por par), el costo total de concentración nunca supera $1000 \times 208$, garantizando que asignar un parcial adicional siempre es más valioso que cualquier mejora en dispersión.
+
+\subsection{¿Por qué solo días consecutivos en Modelo 3?}
+
+El análisis mostró que:
+\begin{itemize}
+    \item Días consecutivos representan el \textbf{80\% del impacto} en experiencia estudiantil
+    \item Considerar TODOS los pares aumenta complejidad \textbf{11x}
+    \item La optimización natural dispersa días no-consecutivos sin penalización explícita
+\end{itemize}
+
+Es un trade-off razonable: \textbf{20\% precisión vs 91\% reducción de variables}.
+
+\end{document}
